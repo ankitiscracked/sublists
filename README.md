@@ -3,7 +3,7 @@
 Save Substack posts and Notes into lists in Apple Notes. Uses Substack's normal Save button and adds a **Lists** tab to Saved.
 
 <details>
-<summary>Screenshots from Paper</summary>
+<summary>Screenshots</summary>
 
 Choose a list when saving:
 
@@ -21,7 +21,7 @@ View the items in a list:
 
 ![List detail page showing saved posts and Notes](docs/screenshots/list-detail.png)
 
-*Design previews exported from Paper.*
+*Design previews.*
 
 </details>
 
