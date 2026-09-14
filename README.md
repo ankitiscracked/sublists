@@ -19,7 +19,7 @@ Browse and search your lists:
 
 View the items in a list:
 
-![List detail page showing saved posts and Notes](docs/screenshots/list-detail.png)
+![List detail page showing saved posts and Notes](docs/screenshots/list-detail-borderless.png)
 
 Delete a list with confirmation:
 
