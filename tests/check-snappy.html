@@ -1,0 +1,36 @@
+<!doctype html><meta charset="utf-8"><title>Direct-save picker checks</title><pre id="result" role="status">Running direct-save checks…</pre><iframe title="Delayed Notes preview" src="/preview/index.html" style="width:500px;height:720px"></iframe><script>
+const f=document.querySelector('iframe'),out=document.querySelector('#result');
+const wait=ms=>new Promise(r=>setTimeout(r,ms)),assert=(ok,msg)=>{if(!ok)throw Error(msg)};
+f.onload=async()=>{try{
+ const w=f.contentWindow,d=f.contentDocument;await wait(200);
+ const original=w.chrome.runtime.sendMessage;let release,requests=[];
+ const gate=new Promise(r=>release=r);
+ w.chrome.runtime.sendMessage=async req=>{requests.push(req);if(req.action==='save')await gate;return original(req)};
+ const b=d.querySelector('button[aria-label="Save"]');b.scrollIntoView({block:'center'});
+ let start=performance.now();b.click();await wait(120);
+ const search=d.querySelector('.sf-search');assert(search&&!search.disabled,'Picker ready');const readyMs=performance.now()-start;
+ assert(!requests.some(r=>r.action==='save'||r.action==='createFolder'),'Opening chooser makes no Notes write');
+ search.value='Design';search.dispatchEvent(new Event('input'));d.querySelector('.sf-choice').click();await wait(80);
+ assert(!d.querySelector('.sf-success'),'No premature success before note persistence');
+ assert(requests.filter(r=>r.action==='save').length===1&&requests.find(r=>r.action==='save').folderId==='design','Exactly one direct destination write');
+ d.querySelector('.sf-choice').click();assert(requests.filter(r=>r.action==='save').length===1,'Double click cannot duplicate in-flight save');
+ d.querySelector('.sf-popover').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert(!d.querySelector('.sf-popover'),'Can dismiss while write is pending');
+ release();await wait(150);const state=await original({action:'snapshot'});
+ assert(state.folders.find(x=>x.id==='design').posts.length===1,'Selected save finishes after dismissal');assert(!state.folders.some(x=>x.name==='Inbox'),'No Inbox created');
+ w.chrome.runtime.sendMessage=async req=>{requests.push(req);return original(req)};
+ const second=d.querySelectorAll('button[aria-label="Save"]')[1];second.scrollIntoView({block:'center'});second.click();await wait(120);
+ const input=d.querySelector('.sf-search');input.value='New direct list';input.dispatchEvent(new Event('input'));requests=[];
+ d.querySelector('.sf-choice').click();await wait(100);
+ assert(requests.length===1&&requests[0].action==='save'&&requests[0].folderName==='New direct list','Create and save share one request');
+ assert(d.querySelector('.sf-success')?.textContent.includes('Created “New direct list”'),'Created-and-saved success after persistence');
+ d.querySelector('.sf-popover').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ for(let i=0;i<35;i++)await original({action:'createFolder',name:'Long chooser '+i});
+ const third=d.querySelectorAll('button[aria-label="Save"]')[2];third.scrollIntoView({block:'center'});requests=[];third.click();await wait(120);
+ const pop=d.querySelector('.sf-popover'),row=[...pop.querySelectorAll('.sf-choice')].at(-1);pop.scrollTop=400;row.focus({preventScroll:true});const scroll=pop.scrollTop;
+ assert(scroll>0,'Long chooser scrolls');assert(d.activeElement===row,'Keyboard focus stays on choice');
+ pop.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait(120);
+ assert(!requests.some(r=>r.action==='save'||r.action==='createFolder'),'Scrolling and dismissal never write Notes');
+ assert(!(await original({action:'snapshot'})).folders.some(f=>f.posts.some(p=>p.url.endsWith('/weekend-without-a-plan'))),'Unchosen item is absent from Notes');
+ out.textContent=`PASS: picker ready within ${readyMs.toFixed(0)}ms; no write before selection or on dismissal; one direct save; one create-and-save request; asynchronous completion after dismissal; duplicate-click guard; truthful confirmation; long chooser scrolling.`;
+}catch(e){out.textContent='FAIL: '+e.message;console.error(e)}};
+</script>

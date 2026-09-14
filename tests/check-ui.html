@@ -1,0 +1,125 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Folder picker checks</title>
+<style>body{font:14px system-ui}iframe{width:390px;height:700px;border:1px solid #888}pre{white-space:pre-wrap}</style>
+<pre id="result" role="status">Running preview checks…</pre><iframe title="Extension test preview" src="/preview/index.html?v=07"></iframe>
+<script>
+const frame=document.querySelector('iframe'), result=document.querySelector('#result');
+const assert=(ok,message)=>{if(!ok)throw Error(message)};
+const tick=()=>new Promise(resolve=>setTimeout(resolve,180));
+frame.onload=async()=>{
+ try {
+  const d=frame.contentDocument,w=frame.contentWindow;
+  const open=async(index=0)=>{const b=d.querySelectorAll('button[aria-label="Save"]')[index];b.scrollIntoView({block:'center'});if(b.getAttribute('aria-pressed')==='true')b.click();b.click();await tick();};
+  const query=async value=>{const input=d.querySelector('.sf-search');input.value=value;input.dispatchEvent(new Event('input'));await tick();};
+  const choose=async (name, keepConfirmation=false)=>{const b=[...d.querySelectorAll('.sf-choice')].find(b=>b.textContent.includes(name));assert(b,'Missing choice '+name);b.click();await tick();const success=d.querySelector('.sf-success');if(success){w.lastSuccess=success.textContent;assert(success.querySelector('[role="status"]'),'Success announced');assert(success.getAttribute('aria-busy')==='false','Success is not aria-busy');if(keepConfirmation)return;success.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();}};
+  await tick();
+  assert(d.querySelectorAll('button[aria-label="Save"]').length===3,'Native buttons present');
+  assert(!d.querySelector('.sf-save'),'No extra save button');
+  assert(!d.querySelector('.sf-panel,.sf-collection,.sf-dialog'),'No dashboard or modal');
+  await open();
+  assert(d.activeElement===d.querySelector('.sf-search'),'Search autofocus');
+  assert(d.querySelectorAll('.sf-choice').length===3,'Only existing lists shown');
+  let initialState=await w.chrome.runtime.sendMessage({action:'snapshot'});
+  assert(initialState.folders.every(f=>!f.posts.length),'Opening chooser performs no Notes write');
+  await query('DES');
+  assert([...d.querySelectorAll('.sf-choice')].map(b=>b.textContent).join('|')==='Design|+Create “DES”','Case-insensitive search plus create');
+  await choose('Design',true);
+  assert(d.querySelector('.sf-success'),'Confirmation stays visible');
+  await new Promise(resolve=>setTimeout(resolve,2800));
+  assert(w.lastSuccess.includes('Saved to Design'),'Saved confirmation');
+  assert(!d.querySelector(':popover-open'),'Confirmation dismisses with Escape');
+  assert(d.activeElement===d.querySelector('button[aria-label="Save"]'),'Focus returns to trigger');
+  const firstNoteId=(await w.chrome.runtime.sendMessage({action:'snapshot'})).folders.find(f=>f.name==='Design').posts[0].noteId;
+  await open(); await query('Design');
+  assert(d.querySelectorAll('.sf-choice').length===1,'Exact name suppresses create');
+  assert(d.querySelector('.sf-check'),'Saved marker from Notes snapshot');
+  await choose('Design');
+  let state=await w.chrome.runtime.sendMessage({action:'snapshot'});
+  assert(state.folders.find(f=>f.name==='Design').posts.length===1,'Duplicate-safe save');
+  assert(state.folders.find(f=>f.name==='Design').posts[0].noteId===firstNoteId,'Repeat save keeps note identity');
+  assert(!state.folders.some(f=>f.name==='Inbox'),'No Inbox created');
+  await open(); await query('Art & essays'); await choose('Create');
+  state=await w.chrome.runtime.sendMessage({action:'snapshot'});
+  assert(state.folders.find(f=>f.name==='Art & essays').posts.length===1,'Create and save');
+  assert(w.lastSuccess.includes('Created “Art & essays”')&&w.lastSuccess.includes('Item saved to this list'),'Created and saved confirmation');
+  await open(); await open(1);
+  assert(d.querySelectorAll('.sf-popover').length===1,'Only one anchored popover');
+  assert(d.querySelectorAll('button[aria-label="Save"]')[0].getAttribute('aria-expanded')===null,'Native trigger attributes restored');
+  const r=d.querySelector('.sf-popover').getBoundingClientRect(),a=d.querySelectorAll('button[aria-label="Save"]')[1].getBoundingClientRect();
+  assert(r.left>=0&&r.right<=w.innerWidth&&r.top>=0&&r.bottom<=w.innerHeight,'Fits narrow viewport');
+  assert(Math.abs(r.top-a.bottom-4)<1||Math.abs(a.top-r.bottom-4)<1,'Anchored with 4px gap');
+  d.querySelector('.sf-search').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();
+  assert(!d.querySelector('.sf-popover'),'Escape dismisses');
+  state=await w.chrome.runtime.sendMessage({action:'snapshot'});
+  assert(!state.folders.some(f=>f.posts.some(p=>p.url.endsWith('/room-for-living'))),'Dismissal creates no Notes item');
+  d.querySelector('#simulate-error').click(); await open();
+  assert(d.querySelector('.sf-error').textContent.includes('Simulated'),'Connection error visible');
+  await choose('Retry'); assert(d.querySelector('.sf-search').disabled===false,'Retry recovers');
+  await query('Design');
+  d.querySelector('#simulate-error').click();await choose('Design');
+  assert(d.querySelector('.sf-error')&&!d.querySelector('.sf-choice').disabled,'Save failure remains retryable');
+  await choose('Design');
+  await open();
+  w.history.pushState(null,'','/settings');w.dispatchEvent(new PopStateEvent('popstate'));await tick();
+  assert(!d.querySelector('.sf-popover'),'SPA navigation closes picker');
+  assert(d.querySelectorAll('button[aria-label="Save"]').length===3,'Native buttons never removed');
+  assert(w.nativeSaveClicks>0&&w.nativeCardClicks===0,'Native saves run without card navigation');
+  const bookmark=d.querySelector('button[aria-label="Save"]');
+  assert(bookmark.getAttribute('aria-pressed')==='true','Native post is saved');
+  bookmark.click();await tick();
+  assert(bookmark.getAttribute('aria-pressed')==='false'&&!d.querySelector('.sf-popover'),'Unsave stays native, no chooser');
+  // Reader menu fixture: menu row disappears; its opener remains the popover anchor.
+  w.history.pushState(null,'','/home/post/p-123');
+  const reader=d.createElement('article');reader.className='post-viewer-post';
+  reader.innerHTML='<a href="https://writer.substack.com" target="_blank">Writer</a><a href="https://writer.substack.com/p/reader" target="_blank">Reader title</a><figure><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22/%3E"></figure>';
+  d.body.append(reader);
+  const more=d.createElement('button');more.id='reader-more';more.style.cssText='position:fixed;top:20px;right:20px';more.textContent='View more';more.setAttribute('aria-haspopup','menu');d.body.append(more);
+  let menuSaved=false,menuClicks=0;
+  more.onclick=()=>{const menu=d.createElement('div');menu.setAttribute('role','menu');menu.setAttribute('aria-labelledby',more.id);
+   const item=d.createElement('button');item.setAttribute('role','menuitem');item.textContent=menuSaved?'Unsave S':'Save S';
+   item.onclick=()=>{menuSaved=!menuSaved;menuClicks++;menu.remove();more.setAttribute('aria-expanded','false');more.focus();};
+   menu.append(item);d.body.append(menu);more.setAttribute('aria-expanded','true');};
+  more.scrollIntoView({block:'center'});more.click();d.querySelector('[role="menuitem"]').click();await tick();
+  assert(menuSaved&&menuClicks===1&&!d.querySelector('[role="menu"]'),'Native menu save runs and dismisses');
+  assert(d.querySelector(':popover-open'),'Reader Save opens picker after menu dismissal');
+  assert(!d.querySelector('.sf-popover').closest('a'),'Picker outside post links');
+  await choose('Design');
+  assert(w.lastSavedRequest.url==='https://writer.substack.com/p/reader'&&w.lastSavedRequest.title==='Reader title','Reader metadata reaches save');
+  assert(more.getAttribute('aria-haspopup')==='menu'&&more.getAttribute('aria-expanded')==='false','Native menu ARIA untouched');
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();
+  assert(!menuSaved&&!d.querySelector('.sf-popover'),'Menu Unsave never opens chooser');
+  const readerSave=d.createElement('button');readerSave.setAttribute('aria-label','Save');readerSave.style.cssText='position:fixed;top:60px;right:20px';d.body.append(readerSave);
+  readerSave.onclick=()=>readerSave.classList.toggle('saved-fixture');
+  readerSave.click();await tick();await choose('Design');
+  assert(w.lastSavedRequest.url==='https://writer.substack.com/p/reader','Reader bookmark outside article resolves current post');
+  readerSave.click();await tick();assert(!d.querySelector('.sf-popover'),'Reader bookmark unsave ignored');readerSave.remove();
+  const audio=d.createElement('button');audio.setAttribute('aria-label','s');d.body.append(audio);audio.click();await tick();
+  assert(!d.querySelector('.sf-popover'),'Reader audio control ignored');audio.remove();
+  // Standalone publication uses its header and canonical metadata, not body links.
+  reader.remove();w.history.pushState(null,'','/p/publication');
+  const page=d.createElement('article');page.className='post';page.innerHTML='<div class="post-header"><h1>Publication title</h1></div>';d.body.append(page);
+  const canonical=d.createElement('link');canonical.rel='canonical';canonical.href='https://writer.substack.com/p/publication';d.head.append(canonical);
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();await choose('Design');
+  assert(w.lastSavedRequest.title==='Publication title'&&w.lastSavedRequest.url===canonical.href,'Publication menu metadata');
+  page.remove();canonical.remove();w.history.pushState(null,'','/home');menuSaved=false;
+  // Note menu chooses its own permalink; the quoted post bookmark chooses the post.
+  const note=d.createElement('div');note.setAttribute('role','article');note.setAttribute('aria-label','Note');
+  note.innerHTML='<div data-entity-key="c-456"><a href="https://substack.com/@writer"><img alt="Writer avatar" width="36"></a><a href="https://substack.com/@writer">Writer</a><a href="https://substack.com/@writer/note/c-456?utm_source=feed">Today</a><div class="ProseMirror FeedProseMirror">My own note &amp; thoughts.</div><img width="200" src="https://substackcdn.com/note-test.jpg"><div data-entity-key="p-789"><a href="https://writer.substack.com/p/quoted"><h3>Quoted post</h3><img width="200" src="https://substackcdn.com/quoted-test.jpg"><button aria-label="Save" id="quote-save">Bookmark</button></a></div><div data-entity-key="c-999"><a href="https://substack.com/@other/note/c-999">Quoted note</a><div class="FeedProseMirror">Other author text</div></div></div>';
+  d.body.append(note);note.firstElementChild.prepend(more);
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();await choose('Design');
+  assert(w.lastSavedRequest.url==='https://substack.com/@writer/note/c-456'&&w.lastSavedRequest.title==='My own note & thoughts.'&&w.lastSavedRequest.publication==='Writer','Note saves own permalink, prose and author');
+  assert(w.lastSavedRequest.thumbnail==='https://substackcdn.com/note-test.jpg','Note thumbnail excludes quoted post and avatar');
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();assert(!d.querySelector('.sf-popover'),'Note unsave ignored');
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();await query('Design');assert(d.querySelector('.sf-check'),'Note saved check uses canonical permalink');await choose('Design');
+  state=await w.chrome.runtime.sendMessage({action:'snapshot'});
+  assert(state.folders.find(f=>f.name==='Design').posts.filter(p=>p.url.includes('/note/c-456')).length===1,'Note duplicate-safe save');
+  const quote=d.querySelector('#quote-save');quote.style.cssText='position:fixed;top:80px;right:20px';quote.onclick=e=>e.preventDefault();quote.click();await tick();await choose('Design');
+  assert(w.lastSavedRequest.url==='https://writer.substack.com/p/quoted'&&w.lastSavedRequest.title==='Quoted post','Quoted post bookmark saves post instead of enclosing Note');
+  note.querySelector('.FeedProseMirror').remove();menuSaved=false;
+  more.click();d.querySelector('[role="menuitem"]').click();await tick();await choose('Essays');
+  assert(w.lastSavedRequest.title==='Note by Writer','Image-only Note uses author title, excludes quoted prose');
+  menuSaved=false;more.click();d.querySelector('[role="menuitem"]').textContent='Save as image';d.querySelector('[role="menuitem"]').click();await tick();
+  assert(!d.querySelector('.sf-popover'),'Save as image stays native');
+  result.textContent='PASS: Notes with quoted posts, image-only Notes, reader bookmarks and menus, timeline/publication saves, native unsaves, search, create, duplicate-safe save, focus, anchor bounds, Escape, error recovery, SPA cleanup.';
+ }catch(e){result.textContent='FAIL: '+e.message;throw e;}
+};
+</script></html>
