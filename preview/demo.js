@@ -1,4 +1,5 @@
 // Preview-only transport. This file is not shipped inside the Chrome extension.
+const emptyPreview = new URL(location.href).searchParams.get("empty");
 const previewFailure = new URL(location.href).searchParams.get("failure");
 const listPreview = location.pathname === "/saved" || new URL(location.href).searchParams.has("lists");
 history.replaceState(null, "", listPreview ? "/saved" + location.hash : "/home");
@@ -76,3 +77,6 @@ if(listPreview) {
  ];
  db.folders.find(f=>f.id==='weekend').posts=[{noteId:'weekend-post',title:demoPosts[1].title,url:demoPosts[1].url,thumbnail:''}];
 }
+
+if (emptyPreview === "lists") db.folders = [];
+if (emptyPreview === "items") db.folders.forEach(f => f.posts = []);

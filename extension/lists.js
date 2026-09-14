@@ -21,6 +21,22 @@
   }
   function icon(cls, html) { const node = el('span', cls); node.innerHTML = html; return node; }
   function count(n) { return `${n} saved ${n === 1 ? 'item' : 'items'}`; }
+  function emptyState(folder) {
+    const box = el('div', 'sf-empty');
+    const copy = el('div', 'sf-empty-copy');
+    const heading = el('h3', '', folder ? 'Nothing saved here yet' : 'No lists yet');
+    const description = el('p');
+    description.append(document.createTextNode(folder ? `Save a post or Note and choose “${folder.name}”.` : 'Save a post or Note, then create a list.'), el('br'),
+      document.createTextNode(folder ? 'Your saved items will appear here.' : 'It will appear here and in Apple Notes.'));
+    copy.setAttribute('role', 'status'); copy.append(heading, description);
+    const browse = el('a', 'sf-browse', 'Browse Substack'); browse.href = 'https://substack.com/home';
+    box.append(icon('sf-empty-icon', folderIcon), copy, browse);
+    return box;
+  }
+  function focusIndex(s) {
+    const search = s.panel.querySelector('.sf-lists-search');
+    (search?.checkVisibility() ? search : s.panel.querySelector('.sf-browse'))?.focus({preventScroll: true});
+  }
   function route() {
     if (['#lists', '#sf-lists'].includes(location.hash)) return {mode: 'index'};
     try {
@@ -214,7 +230,7 @@
           close(); go();
           const notice = el('p', 'sf-delete-success', `“${folder.name}” deleted.`); notice.setAttribute('role', 'status');
           s.panel.querySelector('.sf-library-toolbar').after(notice);
-          s.panel.querySelector('input')?.focus({preventScroll: true});
+          focusIndex(s);
         }
       } catch (failure) {
         error.textContent = failure.message; error.hidden = false;
@@ -237,8 +253,13 @@
     clear.setAttribute('aria-label', 'Clear search'); clear.innerHTML = svg('<path d="m7 7 10 10M17 7 7 17"/>', 14);
     const list = el('div', 'sf-folder-rows'); list.setAttribute('aria-label', 'Lists');
     const empty = el('div', 'sf-library-status'); empty.setAttribute('role', 'status');
+    const noLists = emptyState();
     const existing = new Map();
     function rows() {
+      const hasLists = !!s.data.folders.length;
+      search.hidden = !hasLists; list.hidden = !hasLists; noLists.hidden = hasLists;
+      toolbar.classList.toggle('sf-no-lists', !hasLists);
+      if (!hasLists) { s.query = ''; input.value = ''; }
       clear.hidden = !s.query;
       const folders = s.data.folders.filter(f => f.name.toLocaleLowerCase().includes(s.query.toLocaleLowerCase().trim()));
       const visible = new Set(folders.map(f => f.id));
@@ -255,8 +276,8 @@
         if (row.querySelector('.sf-folder-count').textContent !== count(f.posts.length)) row.querySelector('.sf-folder-count').textContent = count(f.posts.length);
         if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
       });
-      empty.hidden = !!folders.length;
-      empty.textContent = s.query ? 'No lists found.' : 'Your lists will appear here. Save an item to create your first list.';
+      empty.hidden = !hasLists || !!folders.length;
+      empty.textContent = 'No lists found.';
     }
     s.renderRows = rows;
     input.addEventListener('input', () => { s.query = input.value; rows(); });
@@ -266,7 +287,7 @@
     });
     search.append(input, clear);
     const toolbar = el('div', 'sf-library-toolbar'); toolbar.append(search, refreshButton(s));
-    s.panel.append(toolbar, list, empty); rows();
+    s.panel.append(toolbar, list, empty, noLists); rows();
   }
   function storedCard(post) {
     const url = SubstackPosts.canonical(post.url);
@@ -347,7 +368,7 @@
       updateRefreshButton(s); restoreScroll(s); return;
     }
     if (changed) {
-      const back = button('sf-back', '', () => { go(); s.panel.querySelector('input')?.focus({preventScroll: true}); });
+      const back = button('sf-back', '', () => { go(); focusIndex(s); });
       back.append(icon('', backIcon), document.createTextNode('Lists'));
       const actions = el('div', 'sf-list-actions'); actions.append(refreshButton(s), deleteButton(s));
       const toolbar = el('div', 'sf-library-toolbar'); toolbar.append(back, actions); s.panel.append(toolbar);
@@ -360,13 +381,19 @@
     const heading = s.panel.querySelector('.sf-list-heading'), message = s.panel.querySelector('.sf-library-status');
     heading.hidden = !folder;
     if (!folder) {
+      s.panel.querySelector('.sf-empty')?.remove();
       resetCards(s); s.feed.classList.add('sf-original-hidden'); s.fallbacks.hidden = true;
       message.hidden = false; message.textContent = 'This list was moved or deleted in Apple Notes.'; restoreScroll(s); return;
     }
     if (heading.querySelector('h2').textContent !== folder.name) heading.querySelector('h2').textContent = folder.name;
     if (heading.querySelector('.sf-folder-count').textContent !== count(folder.posts.length)) heading.querySelector('.sf-folder-count').textContent = count(folder.posts.length);
-    message.hidden = !!folder.posts.length;
-    message.textContent = 'No saved items yet. Choose this list when saving a post or Note.';
+    message.hidden = true;
+    let empty = s.panel.querySelector('.sf-empty');
+    if (folder.posts.length) empty?.remove();
+    else if (!empty || empty.dataset.folderName !== folder.name) {
+      const next = emptyState(folder); next.dataset.folderName = folder.name;
+      if (empty) empty.replaceWith(next); else s.panel.append(next);
+    }
     filterCards(s); restoreScroll(s);
   }
   function activate() {

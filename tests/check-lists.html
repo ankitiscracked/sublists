@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Saved Lists checks</title><style>body{font:14px system-ui}iframe{width:900px;max-width:100%;height:800px;border:1px solid #ddd}pre{white-space:pre-wrap}</style>
-<pre id="result" role="status">Running Lists checks…</pre><iframe title="Lists preview" src="/preview/index.html?lists=1&v=15"></iframe>
+<pre id="result" role="status">Running Lists checks…</pre><iframe title="Lists preview" src="/preview/index.html?lists=1&v=16"></iframe>
 <script>
 const frame=document.querySelector('iframe'),result=document.querySelector('#result');
 const assert=(ok,msg)=>{if(!ok)throw Error(msg)},tick=()=>new Promise(r=>setTimeout(r,240));
@@ -37,7 +37,7 @@ frame.onload=async()=>{try{
  const pop=d.querySelector('.sf-popover');assert(pop,'Native bookmark opens picker in list');pop.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();
  bookmark.focus();assert(d.activeElement===bookmark,'Native item controls retain keyboard focus');
  await click('.sf-back');await input('Essays');await click('.sf-folder-row');
- assert(d.querySelector('.sf-library-status').textContent.includes('No saved items yet'),'Empty folder');
+ assert(d.querySelector('.sf-empty h3').textContent==='Nothing saved here yet','Empty folder');
  w.history.back();await tick();assert(d.querySelector('.sf-lists-search'),'Browser Back returns to index');
  originalTabs[1].click();await tick();
  assert(d.querySelector('.sf-library').hidden,'Posts leaves Lists');
@@ -96,7 +96,7 @@ frame.onload=async()=>{try{
  broadcast(baseLibrary);await navigate('#lists');await input('');
  // A newly mounted document resolves a copied name link from its first snapshot.
  const reloadFrame=document.createElement('iframe');reloadFrame.hidden=true;
- await new Promise((resolve,reject)=>{reloadFrame.onload=resolve;reloadFrame.onerror=reject;reloadFrame.src='/preview/index.html?lists=1&v=15#list=design';document.body.append(reloadFrame);});
+ await new Promise((resolve,reject)=>{reloadFrame.onload=resolve;reloadFrame.onerror=reject;reloadFrame.src='/preview/index.html?lists=1&v=16#list=design';document.body.append(reloadFrame);});
  await tick();assert(reloadFrame.contentDocument.querySelector('.sf-list-heading h2')?.textContent==='Design','Fresh page resolves copied readable link');reloadFrame.remove();
  // Long lists exercise both document scrolling and Substack-style inner scrollers.
  const library=await send({action:'snapshot'}),longPosts=[];

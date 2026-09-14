@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sublists",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Organize Substack posts and Notes in real Apple Notes folders, with thumbnails and links. Requires the included macOS companion.",
   "minimum_chrome_version": "120",
   "permissions": [

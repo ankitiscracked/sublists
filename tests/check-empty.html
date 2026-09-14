@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>Empty state checks</title>
+<pre id="result">Running…</pre><iframe id="frame" style="width:100%;height:720px;border:0" src="/preview/index.html?lists=1&empty=lists&v=16#lists"></iframe>
+<script>
+const tick=()=>new Promise(r=>setTimeout(r,100)),assert=(v,m)=>{if(!v)throw Error(m)};
+frame.onload=async()=>{try{
+ await tick();const w=frame.contentWindow,d=frame.contentDocument,send=w.chrome.runtime.sendMessage;
+ const q=s=>d.querySelector(s),click=async s=>{assert(q(s),'Missing '+s);q(s).click();await tick();};
+ const visible=s=>!!q(s)?.getClientRects().length;
+ const publish=async data=>{d.dispatchEvent(new CustomEvent('sf-library-changed',{detail:{snapshot:data}}));await tick();};
+ assert(q('.sf-empty h3').textContent==='No lists yet','Cold empty library gets first-list guidance');
+ assert(!visible('.sf-list-search')&&!visible('.sf-folder-rows')&&visible('.sf-refresh'),'Empty library hides search and retains Refresh');
+ assert(q('.sf-browse').href==='https://substack.com/home','Browse action goes to native Home');
+ assert(q('.sf-empty-copy').getAttribute('role')==='status','Empty copy is announced');
+ for(const light of [false,true]){
+  d.body.classList.toggle('light',light);const style=w.getComputedStyle(q('.sf-empty h3'));
+  assert(style.color===w.getComputedStyle(q('.sf-library')).color,'Heading follows current theme');
+  assert(style.fontSize==='20px'&&style.lineHeight==='28px','Paper type scale');
+ }
+ q('.sf-browse').focus();assert(d.activeElement===q('.sf-browse'),'Browse is keyboard accessible');
+ await click('#simulate-error');await click('.sf-refresh');assert(visible('.sf-library-warning')&&visible('.sf-empty'),'Failed refresh keeps empty state and offers Retry');
+ await click('.sf-retry');assert(!q('.sf-library-warning')&&visible('.sf-empty'),'Retry restores empty state');
+ const created=await send({action:'createFolder',name:'Design'});await publish(created.snapshot);
+ assert(visible('.sf-list-search')&&!visible('.sf-empty')&&visible('.sf-folder-row'),'First list automatically replaces empty state');
+ await click('.sf-folder-row');assert(q('.sf-empty h3').textContent==='Nothing saved here yet','Empty detail state');
+ assert(q('.sf-empty p').textContent.includes('“Design”')&&q('.sf-list-heading').textContent.includes('0 saved items'),'Selected list name and zero count');
+ assert(visible('.sf-back')&&visible('.sf-delete-list')&&visible('.sf-refresh'),'Detail retains navigation and actions');
+ const longName='<b>'+'Very long list name '.repeat(5);const renamed=structuredClone(created.snapshot);renamed.folders[0].name=longName;await publish(renamed);
+ assert(!q('.sf-empty b')&&q('.sf-empty p').textContent.includes(longName),'Names render as text');
+ frame.style.width='340px';await tick();
+ assert(d.documentElement.scrollWidth<=w.innerWidth,'Narrow screen and long name do not overflow');
+ const box=q('.sf-empty').getBoundingClientRect();assert(box.left>=0&&box.right<=w.innerWidth,'Empty block stays inside viewport');
+ frame.style.width='100%';await publish(created.snapshot);
+ const post=await send({action:'save',folderId:created.id,title:'Saved item',url:'https://example.substack.com/p/paying-attention'});await publish(post.snapshot);
+ assert(!q('.sf-empty')&&visible('.sf-list-item'),'Saving first item replaces empty state with native card');
+ await click('.sf-back');const input=q('.sf-lists-search');input.value='No match';input.dispatchEvent(new Event('input'));await tick();
+ assert(visible('.sf-library-status')&&!visible('.sf-empty'),'Search misses are distinct from no lists');
+ input.value='Design';input.dispatchEvent(new Event('input'));await click('.sf-folder-row');
+ await click('.sf-delete-list');await click('.sf-delete-confirm');
+ assert(w.location.hash==='#lists'&&q('.sf-empty h3').textContent==='No lists yet','Deleting last list returns to initial empty state');
+ assert(!visible('.sf-list-search')&&d.activeElement===q('.sf-browse'),'Deleting last list focuses visible Browse action');
+ assert(visible('.sf-delete-success'),'Deletion success coexists with empty state');
+ result.textContent='PASS: cold empty library, themes and typography, accessible Browse Home link, refresh failure/retry, first-list transition, named empty detail, long-name escaping and narrow layout, first-item transition, search misses, last-list deletion and focus.';
+}catch(e){result.textContent='FAIL: '+e.message;throw e;}};
+</script>
