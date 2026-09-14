@@ -1,4 +1,4 @@
-const command = "gh auth token --hostname github.com | sed 's/^/Authorization: Bearer /' | curl -fsSL -H @- -H 'Accept: application/vnd.github.raw+json' https://api.github.com/repos/ankitiscracked/sublists/contents/install.sh | bash";
+const command = "curl -fsSL https://raw.githubusercontent.com/ankitiscracked/sublists/main/install.sh | bash";
 document.querySelector("#command").textContent = command;
 document.querySelector("#copy").onclick = async () => {
   try { await navigator.clipboard.writeText(command); document.querySelector("#status").textContent = "Command copied."; }

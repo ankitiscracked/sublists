@@ -1,5 +1,5 @@
 #!/bin/bash
-# Private GitHub installer. No sudo; never modifies Chrome's preferences.
+# Public GitHub installer. No sudo; never modifies Chrome's preferences.
 set +x
 set -euo pipefail
 umask 077
@@ -40,17 +40,11 @@ cleanup() {
 trap cleanup EXIT
 
 if [ -z "$source_dir" ]; then
-  command -v gh >/dev/null || die 'Install GitHub CLI from cli.github.com and run gh auth login first.'
-  # Supply the header over stdin so the token is not in curl's process arguments.
-  github_token="$(gh auth token --hostname github.com 2>/dev/null)" || die 'Run gh auth login with an account that can access ankitiscracked/sublists.'
-  [ -n "$github_token" ] || die 'GitHub authentication is missing. Run gh auth login.'
   printf 'Downloading Sublists…\n'
-  printf 'Authorization: Bearer %s\n' "$github_token" |
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-      --connect-timeout 15 --max-time 120 --header @- \
-      "https://api.github.com/repos/$repo/tarball/main" --output "$work_dir/source.tar.gz" ||
-    die 'Download failed. Make sure your GitHub account has access to the private repository.'
-  unset github_token
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    --connect-timeout 15 --max-time 120 \
+    "https://codeload.github.com/$repo/tar.gz/refs/heads/main" --output "$work_dir/source.tar.gz" ||
+    die 'Download failed. Check your internet connection and try again.'
   mkdir "$work_dir/source"
   tar -xzf "$work_dir/source.tar.gz" -C "$work_dir/source" --strip-components=1
   source_dir="$work_dir/source"

@@ -4,15 +4,12 @@ Save Substack posts and Notes into lists in Apple Notes. Uses Substack's normal 
 
 ## Install
 
-Requires a Mac, Chrome, Python 3.9+, [GitHub CLI](https://cli.github.com), and access to this private repo. Sign in once with `gh auth login`.
+Requires a Mac, Chrome, and Python 3.9+. No GitHub account or GitHub CLI needed.
 
 Run in Terminal:
 
 ```sh
-gh auth token --hostname github.com | sed 's/^/Authorization: Bearer /' |
-  curl -fsSL -H @- -H 'Accept: application/vnd.github.raw+json' \
-  https://api.github.com/repos/ankitiscracked/sublists/contents/install.sh |
-  bash
+curl -fsSL https://raw.githubusercontent.com/ankitiscracked/sublists/main/install.sh | bash
 ```
 
 The script installs the files and companion, then opens Chrome and reveals the extension folder. No sudo or extension ID to copy.
@@ -28,7 +25,6 @@ Run the same command, click **Reload** for Sublists in `chrome://extensions`, th
 
 ## Troubleshooting
 
-- Download denied: your GitHub account needs access to this private repo.
 - Connection issue: click the Sublists extension icon, then **Check companion**.
 - Notes permission denied: enable Notes under **System Settings → Privacy & Security → Automation**.
 
