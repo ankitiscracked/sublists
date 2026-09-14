@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Folder picker checks</title>
 <style>body{font:14px system-ui}iframe{width:390px;height:700px;border:1px solid #888}pre{white-space:pre-wrap}</style>
-<pre id="result" role="status">Running preview checks…</pre><iframe title="Extension test preview" src="/preview/index.html?v=07"></iframe>
+<pre id="result" role="status">Running preview checks…</pre><iframe title="Extension test preview" src="/preview/index.html?v=14"></iframe>
 <script>
 const frame=document.querySelector('iframe'), result=document.querySelector('#result');
 const assert=(ok,message)=>{if(!ok)throw Error(message)};
@@ -10,7 +10,7 @@ frame.onload=async()=>{
   const d=frame.contentDocument,w=frame.contentWindow;
   const open=async(index=0)=>{const b=d.querySelectorAll('button[aria-label="Save"]')[index];b.scrollIntoView({block:'center'});if(b.getAttribute('aria-pressed')==='true')b.click();b.click();await tick();};
   const query=async value=>{const input=d.querySelector('.sf-search');input.value=value;input.dispatchEvent(new Event('input'));await tick();};
-  const choose=async (name, keepConfirmation=false)=>{const b=[...d.querySelectorAll('.sf-choice')].find(b=>b.textContent.includes(name));assert(b,'Missing choice '+name);b.click();await tick();const success=d.querySelector('.sf-success');if(success){w.lastSuccess=success.textContent;assert(success.querySelector('[role="status"]'),'Success announced');assert(success.getAttribute('aria-busy')==='false','Success is not aria-busy');if(keepConfirmation)return;success.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();}};
+  const choose=async (name, keepConfirmation=false)=>{const b=[...d.querySelectorAll('.sf-choice,.sf-recovery-button')].find(b=>b.textContent.includes(name));assert(b,'Missing choice '+name);b.click();await tick();const success=d.querySelector('.sf-success');if(success){w.lastSuccess=success.textContent;assert(success.querySelector('[role="status"]'),'Success announced');assert(success.getAttribute('aria-busy')==='false','Success is not aria-busy');if(keepConfirmation)return;success.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();}};
   await tick();
   assert(d.querySelectorAll('button[aria-label="Save"]').length===3,'Native buttons present');
   assert(!d.querySelector('.sf-save'),'No extra save button');
@@ -52,12 +52,12 @@ frame.onload=async()=>{
   state=await w.chrome.runtime.sendMessage({action:'snapshot'});
   assert(!state.folders.some(f=>f.posts.some(p=>p.url.endsWith('/room-for-living'))),'Dismissal creates no Notes item');
   d.querySelector('#simulate-error').click(); await open();
-  assert(d.querySelector('.sf-error').textContent.includes('Simulated'),'Connection error visible');
-  await choose('Retry'); assert(d.querySelector('.sf-search').disabled===false,'Retry recovers');
+  assert(d.querySelector('.sf-recovery-title').textContent.includes('Couldn’t connect'),'Connection error visible');
+  await choose('Try again'); assert(d.querySelector('.sf-search').disabled===false,'Retry recovers');
   await query('Design');
   d.querySelector('#simulate-error').click();await choose('Design');
-  assert(d.querySelector('.sf-error')&&!d.querySelector('.sf-choice').disabled,'Save failure remains retryable');
-  await choose('Design');
+  assert(d.querySelector('.sf-recovery')&&!d.querySelector('.sf-recovery-button').disabled,'Save failure remains retryable');
+  await choose('Try again');
   await open();
   w.history.pushState(null,'','/settings');w.dispatchEvent(new PopStateEvent('popstate'));await tick();
   assert(!d.querySelector('.sf-popover'),'SPA navigation closes picker');

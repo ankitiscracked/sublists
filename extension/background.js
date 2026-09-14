@@ -7,7 +7,11 @@ const ready = chrome.storage.local.get(["libraries", "defaultAccountId", "thumbn
 });
 async function native(message) {
   try { return await chrome.runtime.sendNativeMessage(HOST, message); }
-  catch { return {ok: false, error: "Apple Notes companion unavailable. Open Setup, install the companion, then retry."}; }
+  catch (error) {
+    const missing = /specified native messaging host not found/i.test(error.message || "");
+    return {ok: false, code: missing ? "COMPANION_MISSING" : "CONNECTION_FAILED",
+      error: missing ? "Install the Sublists helper to connect Apple Notes." : "Couldn’t connect to Apple Notes."};
+  }
 }
 function patch(data, message, result) {
   if (data.accountId !== result.accountId) return;
@@ -100,6 +104,9 @@ function drain() {
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === QUEUE_ALARM) void drain(); });
 chrome.runtime.onStartup.addListener(() => { void drain(); });
 chrome.runtime.onInstalled.addListener(() => { void drain(); });
+chrome.action.onClicked.addListener(() => {
+  void chrome.tabs.create({url: "https://substack.com/saved#lists"});
+});
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   let url; try { url = sender.url ? new URL(sender.url) : null; } catch { return; }
   const publication = url?.protocol === "https:" && (url.hostname === "substack.com" || url.hostname.endsWith(".substack.com"));
@@ -107,7 +114,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id || (!internal && !publication)) return;
   (async () => {
     await ready;
-    if (message?.action === "setup") { await chrome.tabs.create({url: chrome.runtime.getURL("setup.html")}); return {ok: true}; }
+    if (message?.action === "setup") { await chrome.tabs.create({url: "https://github.com/ankitiscracked/sublists#install"}); return {ok: true}; }
     if (message?.action === "snapshot") return snapshot(message);
     if (!["ping", "createFolder", "save", "show"].includes(message?.action)) return {ok: false, error: "Unknown action."};
     const result = await native(message.action === "save" ? {...message, deferThumbnail: true} : message);

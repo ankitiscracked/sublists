@@ -30,7 +30,7 @@
   }
   async function request(message) {
     const res = await chrome.runtime.sendMessage(message);
-    if (!res?.ok) throw Error(res?.error || "Connection interrupted. Please retry.");
+    if (!res?.ok) throw Object.assign(Error(res?.error || "Connection interrupted. Please retry."), {code: res?.code});
     return res;
   }
   function pick(entry) {
@@ -54,11 +54,13 @@
     const searchBox = el("div", "sf-picker-search");
     searchBox.innerHTML = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>';
     searchBox.append(search);
-    pop.append(searchBox, list, message);
+    const recoveryBox = el("div", "sf-recovery-content");
+    recoveryBox.hidden = true;
+    pop.append(searchBox, list, message, recoveryBox);
     // Stay outside the post link so picker interactions cannot navigate the card.
     const link = trigger.closest("a");
     (link || trigger).after(pop);
-    let snapshot = latestSnapshot, busy = false, closed = false, dismissTimer, completed = false;
+    let snapshot = latestSnapshot, busy = false, loading = false, recovery = false, closed = false, dismissTimer, completed = false;
     function close() { if (pop.matches(":popover-open")) pop.hidePopover(); cleanup(); }
     function position(event) {
       if (closed || (event?.target instanceof Node && pop.contains(event.target))) return;
@@ -80,7 +82,49 @@
       pop.setAttribute("aria-busy", String(value));
       for (const control of pop.querySelectorAll("input,button")) control.disabled = value;
     }
+    function clearRecovery() {
+      recovery = false;
+      pop.classList.remove("sf-recovery");
+      recoveryBox.hidden = true;
+      recoveryBox.replaceChildren();
+      searchBox.hidden = list.hidden = message.hidden = false;
+    }
+    function recover(error, retry, saving = false) {
+      const hadFocus = pop.contains(document.activeElement);
+      const missing = error.code === "COMPANION_MISSING";
+      recovery = true;
+      lock(false);
+      pop.classList.add("sf-recovery");
+      searchBox.hidden = list.hidden = message.hidden = true;
+      recoveryBox.hidden = false;
+      const copy = el("div", "sf-recovery-copy");
+      copy.setAttribute("role", "status");
+      copy.append(el("div", "sf-recovery-title", missing ? "Connect Apple Notes" : "Couldn’t connect to Apple Notes"),
+        el("div", "sf-recovery-detail", missing
+          ? "Install the Sublists helper on your Mac to save items to lists in Apple Notes."
+          : saving ? "We couldn’t confirm the save. Try again, or check your setup."
+          : "We couldn’t load your lists. Try again, or check your setup."));
+      const actions = el("div", "sf-recovery-actions");
+      const retryButton = button(missing ? "Already installed? Try again" : "Try again", () => {
+        if (busy || loading) return;
+        retryButton.textContent = saving ? "Saving…" : "Connecting…";
+        retry();
+      }, "sf-recovery-button" + (missing ? "" : " sf-recovery-primary"));
+      const setupButton = button(missing ? "Set up Apple Notes" : "Setup help", async () => {
+        setupButton.disabled = true;
+        try { await request({action: "setup"}); }
+        catch { copy.lastElementChild.textContent = "Couldn’t open setup help. Try again."; }
+        finally { if (!closed && !busy) setupButton.disabled = false; }
+      }, "sf-recovery-button" + (missing ? " sf-recovery-primary" : ""));
+      actions.append(...(missing ? [setupButton, retryButton] : [retryButton, setupButton]));
+      recoveryBox.replaceChildren(copy, actions);
+      position();
+      if (hadFocus || document.activeElement === document.body || document.activeElement === trigger) {
+        (missing ? setupButton : retryButton).focus({preventScroll: true});
+      }
+    }
     function success(folder, created) {
+      clearRecovery();
       completed = true;
       pop.setAttribute("aria-busy", "false");
       pop.classList.add("sf-success");
@@ -116,10 +160,16 @@
           render(); say(res.warning, true); return;
         }
         success(folder, res.createdFolder);
-      } catch (error) { if (!closed) say(error.message, true); }
+      } catch (error) {
+        if (!closed) {
+          if (error.code) recover(error, () => save(folder, name), true);
+          else { if (recovery) render(); say(error.message, true); }
+        }
+      }
       finally { if (!closed && !completed) lock(false); }
     }
     function render() {
+      clearRecovery();
       const previousScroll = pop.scrollTop, focusedName = list.contains(document.activeElement) ? document.activeElement.dataset.folderId || document.activeElement.textContent : null;
       list.replaceChildren();
       const query = search.value.trim(), folded = query.toLocaleLowerCase();
@@ -144,40 +194,42 @@
       pop.scrollTop = previousScroll;
     }
     function update(data) {
-      if (closed || completed || busy) return;
+      if (closed || completed || busy || loading || recovery) return;
       const key = value => JSON.stringify(value?.folders.map(f => [f.id, f.name, f.posts.some(p => SubstackPosts.canonical(p.url) === post.url)]));
       const changed = key(snapshot) !== key(data);
       snapshot = data;
       if (changed || !list.children.length) render();
       lock(false);
     }
-    async function load() {
+    async function load(refresh = false) {
+      if (loading || closed || completed) return;
+      loading = true;
+      const locksPicker = recovery || !snapshot;
+      const canUpdate = () => !closed && !completed && (locksPicker || !busy && !recovery);
       // Opening or dismissing the chooser never writes anything to Apple Notes.
-      if (snapshot) { render(); lock(false); search.focus({preventScroll: true}); }
+      if (recovery) lock(true);
+      else if (snapshot) { render(); lock(false); search.focus({preventScroll: true}); }
       else { lock(true); say("Loading folders…"); }
       try {
         // Cached immediately; only an uncached library needs a Notes read.
-        const data = await request({action: "snapshot"});
-        if (!closed && !busy) update(data);
-        else if (!closed && pop.querySelector('.sf-search')?.disabled && !list.children.length) {
+        const data = await request({action: "snapshot", ...(refresh ? {refresh: true} : {})});
+        if (canUpdate()) {
           snapshot = data;
           render(); lock(false); search.focus({preventScroll: true});
         }
       } catch (error) {
-        if (closed || completed || busy && list.children.length) return;
-        lock(false); say(error.message, true);
-        list.append(button("Retry", load), button("Open setup", async () => {
-          try { await request({action: "setup"}); } catch (e) { say(e.message, true); }
-        }));
-      }
+        if (canUpdate()) recover(error, () => load(true));
+      } finally { loading = false; }
     }
-    search.addEventListener("input", render);
+    search.addEventListener("input", () => { if (snapshot && !recovery) render(); });
     pop.addEventListener("keydown", event => {
       if (event.key === "Escape") { event.preventDefault(); close(); trigger.focus({preventScroll: true}); return; }
       if (event.key === "Enter" && event.target === search) { event.preventDefault(); list.querySelector("button:not(:disabled)")?.click(); }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
       event.preventDefault();
-      const choices = [search, ...list.querySelectorAll("button:not(:disabled)")];
+      const choices = recovery ? [...recoveryBox.querySelectorAll("button:not(:disabled)")]
+        : [search, ...list.querySelectorAll("button:not(:disabled)")];
+      if (!choices.length) return;
       const index = choices.indexOf(document.activeElement), direction = event.key === "ArrowDown" ? 1 : -1;
       choices[(index + direction + choices.length) % choices.length].focus();
     });

@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><title>Saved Lists checks</title><style>body{font:14px system-ui}iframe{width:900px;max-width:100%;height:800px;border:1px solid #ddd}pre{white-space:pre-wrap}</style>
-<pre id="result" role="status">Running Lists checks…</pre><iframe title="Lists preview" src="/preview/index.html?lists=1&v=10"></iframe>
+<pre id="result" role="status">Running Lists checks…</pre><iframe title="Lists preview" src="/preview/index.html?lists=1&v=14"></iframe>
 <script>
 const frame=document.querySelector('iframe'),result=document.querySelector('#result');
 const assert=(ok,msg)=>{if(!ok)throw Error(msg)},tick=()=>new Promise(r=>setTimeout(r,240));
@@ -96,7 +96,7 @@ frame.onload=async()=>{try{
  broadcast(baseLibrary);await navigate('#lists');await input('');
  // A newly mounted document resolves a copied name link from its first snapshot.
  const reloadFrame=document.createElement('iframe');reloadFrame.hidden=true;
- await new Promise((resolve,reject)=>{reloadFrame.onload=resolve;reloadFrame.onerror=reject;reloadFrame.src='/preview/index.html?lists=1&v=10#list=design';document.body.append(reloadFrame);});
+ await new Promise((resolve,reject)=>{reloadFrame.onload=resolve;reloadFrame.onerror=reject;reloadFrame.src='/preview/index.html?lists=1&v=14#list=design';document.body.append(reloadFrame);});
  await tick();assert(reloadFrame.contentDocument.querySelector('.sf-list-heading h2')?.textContent==='Design','Fresh page resolves copied readable link');reloadFrame.remove();
  // Long lists exercise both document scrolling and Substack-style inner scrollers.
  const library=await send({action:'snapshot'}),longPosts=[];

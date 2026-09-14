@@ -153,7 +153,7 @@ for(const label of ['Save','Save S','SaveS']) assert.equal(isSaveItem({getAttrib
 for(const label of ['Unsave','Saved','Save image','Save as image']) assert.equal(isSaveItem({getAttribute:()=> 'menuitem',textContent:label}),false);
 let listener;
 const runtime={onStartup:{addListener(){}},onInstalled:{addListener(){}},id:'test-extension',getURL:()=> 'chrome-extension://test-extension/',onMessage:{addListener:fn=>{listener=fn;}},sendNativeMessage:async()=>({ok:true})};
-vm.runInNewContext(readFileSync(new URL('extension/background.js',base),'utf8'),{URL,setTimeout,chrome:{runtime,storage:{local:{get:async()=>({}),set:async()=>{}}},tabs:{query:async()=>[]},alarms:{onAlarm:{addListener(){}},create:async()=>{},clear:async()=>{}}}});
+vm.runInNewContext(readFileSync(new URL('extension/background.js',base),'utf8'),{URL,setTimeout,chrome:{action:{onClicked:{addListener(){}}},runtime,storage:{local:{get:async()=>({}),set:async()=>{}}},tabs:{query:async()=>[]},alarms:{onAlarm:{addListener(){}},create:async()=>{},clear:async()=>{}}}});
 for(const url of ['https://substack.com/','https://writer.substack.com/p/test']) assert.equal(listener({action:'snapshot'},{id:runtime.id,url},()=>{}),true);
 for(const url of ['https://substack.com.evil.test/','https://notsubstack.com/','http://writer.substack.com/']) assert.equal(listener({action:'snapshot'},{id:runtime.id,url},()=>{}),undefined);
 assert.equal(listener({action:'snapshot'},{id:'other-extension',url:'https://substack.com/'},()=>{}),undefined);

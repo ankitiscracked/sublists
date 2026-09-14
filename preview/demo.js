@@ -1,4 +1,5 @@
 // Preview-only transport. This file is not shipped inside the Chrome extension.
+const previewFailure = new URL(location.href).searchParams.get("failure");
 const listPreview = location.pathname === "/saved" || new URL(location.href).searchParams.has("lists");
 history.replaceState(null, "", listPreview ? "/saved" + location.hash : "/home");
 const demoPosts = [
@@ -15,8 +16,11 @@ for (const p of demoPosts) {
 }
 const db = {accounts:[{id:"preview",name:"Preview"}],accountId:"preview",accountName:"Preview",folders:[{id:"essays",name:"Essays",posts:[]},{id:"design",name:"Design",posts:[]},{id:"weekend",name:"Weekend reads",posts:[]}]};
 let failNext = false;
+window.previewFailure = previewFailure;
+window.previewRequests = [];
 window.chrome = {runtime:{sendMessage:async req => {
-  if (failNext) { failNext = false; return {ok:false,error:"Simulated connection failure. Retry safely."}; }
+  if (req.action !== "setup" && (window.previewFailure || failNext)) { failNext = false; return {ok:false,code:window.previewFailure === "missing" ? "COMPANION_MISSING" : "CONNECTION_FAILED",error:"Simulated connection failure. Retry safely."}; }
+  window.previewRequests.push(structuredClone(req));
   if (req.action === "snapshot") return structuredClone({ok:true,...db});
   if (req.action === "createFolder") {
     let f = db.folders.find(f=>f.name.toLowerCase()===req.name.toLowerCase());
@@ -35,7 +39,7 @@ window.chrome = {runtime:{sendMessage:async req => {
     return structuredClone({ok:true,...f.posts.find(p=>p.url===req.url),accountId:db.accountId,createdFolder,existed:!!old,hasThumbnail:true,folderId:f.id,folderName:f.name,snapshot:{ok:true,...db}});
   }
   if (req.action === "show") return {ok:false,error:"Preview only. Installed extension opens the real Apple Notes folder."};
-  if (req.action === "setup") { window.open("/extension/setup.html", "_blank"); return {ok:true}; }
+  if (req.action === "setup") { window.open("https://github.com/ankitiscracked/sublists#install", "_blank", "noopener"); return {ok:true}; }
   return {ok:true};
 }}};
 document.querySelector("#theme").onclick=()=>document.body.classList.toggle("light");

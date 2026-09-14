@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Installation and retry checks</title>
+<style>body{font:14px system-ui}iframe{width:390px;height:700px;border:1px solid #888}pre{white-space:pre-wrap}</style>
+<pre id="result" role="status">Running installation/retry checks…</pre><iframe title="Recovery preview" src="/preview/index.html?failure=missing&v=14"></iframe>
+<script>
+const frame=document.querySelector('iframe'),result=document.querySelector('#result');
+const assert=(ok,message)=>{if(!ok)throw Error(message)},tick=()=>new Promise(r=>setTimeout(r,180));
+frame.onload=async()=>{try{
+ const d=frame.contentDocument,w=frame.contentWindow;
+ const click=async label=>{const b=[...d.querySelectorAll('.sf-popover button')].find(b=>b.textContent===label);assert(b&&!b.disabled,'Enabled button: '+label);b.click();await tick();};
+ const open=async()=>{const b=d.querySelector('button[aria-label="Save"]');b.scrollIntoView({block:'center'});if(b.getAttribute('aria-pressed')==='true')b.click();b.click();await tick();};
+ const choices=()=>d.querySelectorAll('.sf-recovery-button');
+ await tick();assert(w.previewFailure==='missing','Fixture starts with missing host: '+w.previewFailure);await open();
+ assert(d.querySelector('.sf-recovery-title').textContent==='Connect Apple Notes','Missing helper title');
+ assert(d.querySelector('.sf-picker-search').hidden,'Search hidden without a library');
+ assert(choices().length===2&&d.activeElement.textContent==='Set up Apple Notes','Installation actions and focus');
+ for(let i=0;i<3;i++){await click('Already installed? Try again');assert(choices().length===2&&[...choices()].every(b=>!b.disabled),'Repeated failure remains retryable without duplicate actions');}
+ w.previewFailure='connection';await click('Already installed? Try again');
+ assert(d.querySelector('.sf-recovery-title').textContent==='Couldn’t connect to Apple Notes','Transport failure has retry design');
+ assert(d.activeElement.textContent==='Try again','Retry receives focus');
+ await click('Try again');assert(choices().length===2&&[...choices()].every(b=>!b.disabled),'Repeated connection failure remains usable');
+ const pop=d.querySelector('.sf-popover'),r=pop.getBoundingClientRect();
+ assert(r.left>=0&&r.right<=w.innerWidth&&r.top>=0&&r.bottom<=w.innerHeight,'Recovery fits narrow viewport');
+ assert(w.getComputedStyle(pop).padding==='16px'&&Math.round(r.width)===280,'Approved recovery geometry');
+ d.querySelector('#theme').click();assert(w.getComputedStyle(pop).backgroundColor==='rgb(255, 255, 255)','Native light theme');
+ d.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));assert(d.activeElement.textContent==='Setup help','Keyboard navigation skips hidden search');
+ let release;const transport=w.chrome.runtime.sendMessage;
+ w.chrome.runtime.sendMessage=async req=>{await new Promise(r=>release=r);return transport(req);};
+ const retry=[...choices()].find(b=>b.textContent==='Try again');retry.click();retry.click();await tick();
+ assert(d.querySelector('.sf-popover').getAttribute('aria-busy')==='true'&&[...choices()].every(b=>b.disabled),'In-flight retry disables all actions');
+ assert(retry.textContent==='Connecting…','Connecting label');
+ w.previewFailure=null;release();await tick();
+ assert(!d.querySelector('.sf-recovery')&&!d.querySelector('.sf-picker-search').hidden,'Success restores chooser');
+ assert(d.activeElement===d.querySelector('.sf-search'),'Search focus restored');
+ assert(w.previewRequests.at(-1).refresh===true,'Retry bypasses cached library');
+ assert(w.previewRequests.every(r=>r.action!=='save'),'Connection recovery never writes a note');
+ w.chrome.runtime.sendMessage=transport;
+ d.querySelector('#simulate-error').click();await click('Design');
+ assert(d.querySelector('.sf-recovery-detail').textContent.includes('couldn’t confirm'),'Save failure copy is accurate');
+ await click('Try again');assert(d.querySelector('.sf-success-title').textContent==='Saved to Design','Save retry remembers selected list');
+ assert(w.previewRequests.filter(r=>r.action==='save').length===1,'One successful save');
+ d.querySelector('.sf-popover').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();
+ w.previewFailure='connection';await open();
+ w.chrome.runtime.sendMessage=async req=>{await new Promise(r=>release=r);return transport(req);};
+ const closeRetry=[...choices()].find(b=>b.textContent==='Try again');closeRetry.click();await tick();
+ d.querySelector('.sf-popover').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));w.previewFailure=null;release();await tick();
+ assert(!d.querySelector('.sf-popover'),'Closing while retry runs never reopens picker');
+ result.textContent='PASS: missing helper, repeated missing/connection failures, disabled connecting state, forced refresh, chooser recovery, no connection writes, save retry, keyboard focus, 280px layout, light/dark theme, close during retry.';
+}catch(e){result.textContent='FAIL: '+e.stack;console.error(e)}};
+</script></html>

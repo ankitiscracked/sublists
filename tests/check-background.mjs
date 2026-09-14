@@ -7,7 +7,7 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {
 let saved={},calls=[],nativeHandler,listener,alarmListener,broadcasts=[];
 function boot(){
  const runtime={id:'self',getURL:()=> 'chrome-extension://self/',onMessage:{addListener:fn=>listener=fn},onStartup:{addListener(){}},onInstalled:{addListener(){}},sendNativeMessage:async(host,message)=>{calls.push(clone(message));return clone(await nativeHandler(message));}};
- vm.runInNewContext(code,{URL,Date,setTimeout,chrome:{runtime,storage:{local:{get:async()=>clone(saved),set:async v=>Object.assign(saved,clone(v))}},tabs:{query:async()=>[{id:1}],sendMessage:async(id,m)=>broadcasts.push(clone(m))},alarms:{onAlarm:{addListener:fn=>alarmListener=fn},create:async()=>{},clear:async()=>{}}}});
+ vm.runInNewContext(code,{URL,Date,setTimeout,chrome:{action:{onClicked:{addListener(){}}},runtime,storage:{local:{get:async()=>clone(saved),set:async v=>Object.assign(saved,clone(v))}},tabs:{query:async()=>[{id:1}],sendMessage:async(id,m)=>broadcasts.push(clone(m))},alarms:{onAlarm:{addListener:fn=>alarmListener=fn},create:async()=>{},clear:async()=>{}}}});
 }
 const sender={id:'self',url:'https://substack.com/saved'};
 const send=m=>new Promise(resolve=>assert.equal(listener(m,sender,resolve),true));
