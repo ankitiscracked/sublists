@@ -2,6 +2,21 @@
 
 Save Substack posts and Notes into lists in Apple Notes. Uses Substack's normal Save button and adds a **Lists** tab to Saved.
 
+<details>
+<summary>Screenshots from Paper</summary>
+
+Choose a list when saving:
+
+![Substack's native Save button with an anchored list picker](docs/screenshots/choose-list.png)
+
+Create a list and save the item:
+
+![Confirmation after creating a list and saving a post](docs/screenshots/created-and-saved.png)
+
+*Design previews exported from Paper.*
+
+</details>
+
 ## Install
 
 Requires a Mac, Chrome, and Python 3.9+. No GitHub account or GitHub CLI needed.
