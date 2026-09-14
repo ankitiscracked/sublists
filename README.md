@@ -13,6 +13,14 @@ Create a list and save the item:
 
 ![Confirmation after creating a list and saving a post](docs/screenshots/created-and-saved.png)
 
+Browse and search your lists:
+
+![Saved page with searchable lists and saved-item counts](docs/screenshots/lists.png)
+
+View the items in a list:
+
+![List detail page showing saved posts and Notes](docs/screenshots/list-detail.png)
+
 *Design previews exported from Paper.*
 
 </details>
