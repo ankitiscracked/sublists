@@ -8,7 +8,8 @@
   const folderIcon = svg('<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>');
   const searchIcon = svg('<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>');
   const chevron = svg('<path d="m9 5 7 7-7 7"/>', 16);
-  const refreshIcon = svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17"/>', 18);
+  const refreshIcon = svg('<path d="M20 11a8 8 0 1 0-2.3 6.7M20 4v7h-7"/>', 18);
+  const trashIcon = svg('<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>', 18);
   const backIcon = svg('<path d="m15 5-7 7 7 7"/>', 14);
   function el(tag, cls = '', text) {
     const node = document.createElement(tag); node.className = cls;
@@ -101,6 +102,7 @@
     s.cards.clear();
   }
   function deactivate(s) {
+    s.closeDelete?.();
     rememberScroll(s); s.mode = null; s.folderId = undefined; s.routeSlug = undefined; s.renderedView = null; s.loadSeq++;
     s.panel.hidden = true; s.fallbacks.hidden = true;
     s.tabs.classList.remove('sf-lists-active');
@@ -171,6 +173,61 @@
     const control = button('sf-refresh', '', () => refresh(s, true));
     control.innerHTML = refreshIcon; control.title = 'Refresh lists'; control.setAttribute('aria-label', 'Refresh lists');
     return control;
+  }
+  function deleteButton(s) {
+    const control = button('sf-refresh sf-delete-list', '', () => confirmDelete(s, control));
+    control.innerHTML = trashIcon; control.title = 'Delete list'; control.setAttribute('aria-label', 'Delete list');
+    control.setAttribute('aria-haspopup', 'dialog');
+    return control;
+  }
+  function confirmDelete(s, anchor) {
+    const folder = s.data.folders.find(f => f.id === s.folderId);
+    if (!folder || s.closeDelete) return;
+    const accountId = s.data.accountId, dialog = el('dialog', 'sf-delete-dialog');
+    const title = el('h3', '', `Delete “${folder.name}”?`); title.id = 'sf-delete-title';
+    const description = el('p', '', 'This removes the list and all its items from Apple Notes. Your Substack saves are kept.'); description.id = 'sf-delete-description';
+    dialog.setAttribute('aria-labelledby', title.id); dialog.setAttribute('aria-describedby', description.id);
+    const error = el('p', 'sf-delete-error'); error.setAttribute('role', 'alert'); error.hidden = true;
+    let busy = false;
+    const close = () => {
+      dialog.close(); dialog.remove(); s.closeDelete = null;
+      window.removeEventListener('resize', position); document.removeEventListener('scroll', position, true);
+      if (anchor.isConnected) anchor.focus({preventScroll: true});
+    };
+    function position() {
+      const rect = anchor.getBoundingClientRect(), width = dialog.offsetWidth, height = dialog.offsetHeight;
+      dialog.style.left = `${Math.max(8, Math.min(rect.right - width, innerWidth - width - 8))}px`;
+      dialog.style.top = `${Math.max(8, Math.min(rect.bottom + 8, innerHeight - height - 8))}px`;
+    }
+    const cancel = button('sf-delete-cancel', 'Cancel', close);
+    const confirm = button('sf-delete-confirm', 'Delete list', async () => {
+      if (busy) return;
+      busy = true; cancel.disabled = confirm.disabled = true; confirm.textContent = 'Deleting…'; error.hidden = true;
+      dialog.setAttribute('aria-busy', 'true');
+      try {
+        const result = await request({action: 'deleteFolder', accountId, folderId: folder.id});
+        if (state !== s) return;
+        s.dataRevision++;
+        s.data = result.snapshot || {...s.data, folders: s.data.folders.filter(f => f.id !== folder.id)};
+        document.dispatchEvent(new CustomEvent('sf-library-changed', {detail: {snapshot: s.data}}));
+        if (s.folderId === folder.id && s.mode === 'items') {
+          close(); go();
+          const notice = el('p', 'sf-delete-success', `“${folder.name}” deleted.`); notice.setAttribute('role', 'status');
+          s.panel.querySelector('.sf-library-toolbar').after(notice);
+          s.panel.querySelector('input')?.focus({preventScroll: true});
+        }
+      } catch (failure) {
+        error.textContent = failure.message; error.hidden = false;
+        confirm.textContent = 'Retry'; position();
+      } finally {
+        busy = false; cancel.disabled = confirm.disabled = false; dialog.setAttribute('aria-busy', 'false');
+      }
+    });
+    const actions = el('div', 'sf-delete-actions'); actions.append(cancel, confirm);
+    dialog.append(title, description, error, actions); s.panel.append(dialog); s.closeDelete = close;
+    dialog.addEventListener('cancel', event => { event.preventDefault(); if (!busy) close(); });
+    window.addEventListener('resize', position); document.addEventListener('scroll', position, true);
+    dialog.showModal(); position(); cancel.focus({preventScroll: true});
   }
   function renderIndex(s) {
     resetCards(s); s.feed.classList.add('sf-original-hidden'); s.fallbacks.hidden = true;
@@ -283,7 +340,7 @@
     canonicalizeRoute(s);
     s.panel.querySelector('.sf-library-warning')?.remove();
     const key = viewKey(s), changed = s.renderedView !== key;
-    if (changed) { s.panel.replaceChildren(); s.renderedView = key; }
+    if (changed) { s.closeDelete?.(); s.panel.replaceChildren(); s.renderedView = key; }
     s.panel.hidden = false;
     if (s.mode === 'index') {
       if (changed) renderIndex(s); else s.renderRows();
@@ -292,12 +349,14 @@
     if (changed) {
       const back = button('sf-back', '', () => { go(); s.panel.querySelector('input')?.focus({preventScroll: true}); });
       back.append(icon('', backIcon), document.createTextNode('Lists'));
-      const toolbar = el('div', 'sf-library-toolbar'); toolbar.append(back, refreshButton(s)); s.panel.append(toolbar);
+      const actions = el('div', 'sf-list-actions'); actions.append(refreshButton(s), deleteButton(s));
+      const toolbar = el('div', 'sf-library-toolbar'); toolbar.append(back, actions); s.panel.append(toolbar);
       const heading = el('div', 'sf-list-heading'); heading.append(el('h2'), el('span', 'sf-folder-count')); s.panel.append(heading);
       s.panel.append(el('p', 'sf-library-status'));
     }
     updateRefreshButton(s);
     const folder = s.data.folders.find(f => f.id === s.folderId);
+    s.panel.querySelector('.sf-delete-list').hidden = !folder;
     const heading = s.panel.querySelector('.sf-list-heading'), message = s.panel.querySelector('.sf-library-status');
     heading.hidden = !folder;
     if (!folder) {

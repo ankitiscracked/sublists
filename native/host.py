@@ -52,13 +52,13 @@ def validate(req):
     if not isinstance(req, dict):
         raise ValueError("Expected a JSON object.")
     action = req.get("action")
-    if action not in {"ping", "snapshot", "createFolder", "save", "show", "attachThumbnail"}:
+    if action not in {"ping", "snapshot", "createFolder", "deleteFolder", "save", "show", "attachThumbnail"}:
         raise ValueError("Unknown action.")
     clean = {"action": action}
     if action == "ping":
         return clean
-    clean["accountId"] = text(req.get("accountId", ""), "account", optional=True)
-    if action in {"save", "show", "attachThumbnail"}:
+    clean["accountId"] = text(req.get("accountId", ""), "account", optional=action != "deleteFolder")
+    if action in {"save", "show", "attachThumbnail", "deleteFolder"}:
         clean["folderId"] = text(req.get("folderId", ""), "folder", optional=action == "save")
     if action in {"show", "attachThumbnail"}:
         clean["noteId"] = text(req.get("noteId", ""), "note", optional=action == "show")
@@ -185,7 +185,7 @@ def attach_thumbnail(clean, result):
 def handle(req):
     clean = validate(req)
     if clean["action"] == "ping":
-        return {"ok": True, "version": "0.9.0"}
+        return {"ok": True, "version": "0.12.0"}
     with notes_lock():
         result = notes({**clean, "action": "verify", "followNote": True} if clean["action"] == "attachThumbnail" else clean)
     thumbnail = result.get("thumbnail") or clean.get("thumbnail", "")

@@ -22,6 +22,10 @@ window.chrome = {runtime:{sendMessage:async req => {
   if (req.action !== "setup" && (window.previewFailure || failNext)) { failNext = false; return {ok:false,code:window.previewFailure === "missing" ? "COMPANION_MISSING" : "CONNECTION_FAILED",error:"Simulated connection failure. Retry safely."}; }
   window.previewRequests.push(structuredClone(req));
   if (req.action === "snapshot") return structuredClone({ok:true,...db});
+  if (req.action === "deleteFolder") {
+    db.folders = db.folders.filter(f => f.id !== req.folderId);
+    return structuredClone({ok:true,deleted:true,folderId:req.folderId,accountId:db.accountId,snapshot:{ok:true,...db}});
+  }
   if (req.action === "createFolder") {
     let f = db.folders.find(f=>f.name.toLowerCase()===req.name.toLowerCase());
     if (!f) { f={id:crypto.randomUUID(),name:req.name,posts:[]}; db.folders.push(f); }

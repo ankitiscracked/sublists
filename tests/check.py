@@ -145,3 +145,9 @@ for destination in ({}, {'folderId':'f1','folderName':'Reading'}, {'folderName':
     rejects(host.validate, {'action':'save','url':'https://example.substack.com/p/post','title':'Post',**destination})
 assert host.validate({'action':'save','folderName':' Reading ','url':'https://example.substack.com/p/post','title':'Post'})['folderName']=='Reading'
 print('PASS: save requires exactly one explicit destination; list names are bounded and normalized.')
+
+# Destruction requires both stable account and folder IDs.
+for req in ({"action":"deleteFolder"},{"action":"deleteFolder","folderId":"f"},{"action":"deleteFolder","accountId":"a"}):
+    rejects(host.validate, req)
+assert host.validate({"action":"deleteFolder","accountId":"a","folderId":"f"}) == {"action":"deleteFolder","accountId":"a","folderId":"f"}
+print("PASS: delete requires explicit account and folder.")

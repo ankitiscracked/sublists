@@ -15,6 +15,10 @@ async function native(message) {
 }
 function patch(data, message, result) {
   if (data.accountId !== result.accountId) return;
+  if (message.action === "deleteFolder") {
+    data.folders = data.folders.filter(f => f.id !== result.folderId);
+    return;
+  }
   if (message.action === "attachThumbnail") {
     // Image completion never moves or reorders a card: filing can finish while it downloads.
     const existing = data.folders.flatMap(f => f.posts).find(p => p.noteId === result.noteId);
@@ -116,9 +120,15 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     await ready;
     if (message?.action === "setup") { await chrome.tabs.create({url: "https://github.com/ankitiscracked/sublists#install"}); return {ok: true}; }
     if (message?.action === "snapshot") return snapshot(message);
-    if (!["ping", "createFolder", "save", "show"].includes(message?.action)) return {ok: false, error: "Unknown action."};
+    if (!["ping", "createFolder", "deleteFolder", "save", "show"].includes(message?.action)) return {ok: false, error: "Unknown action."};
     const result = await native(message.action === "save" ? {...message, deferThumbnail: true} : message);
-    if (result.ok && ["save", "createFolder"].includes(message.action)) {
+    if (result.ok && message.action === "deleteFolder") {
+      for (const [id, job] of Object.entries(queue)) {
+        if (job.accountId === result.accountId && job.folderId === result.folderId) delete queue[id];
+      }
+      await saveQueue();
+    }
+    if (result.ok && ["save", "createFolder", "deleteFolder"].includes(message.action)) {
       await Promise.all([record(message, result), enqueue(message, result)]);
       if (libraries[result.accountId]) result.snapshot = libraries[result.accountId].data;
       // Let the confirmed save response reach the picker before downloading images.

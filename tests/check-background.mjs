@@ -56,3 +56,20 @@ nativeHandler=async()=>({...post,hasThumbnail:true});boot();alarmListener({name:
 assert.deepEqual(saved.thumbnailQueue,{},'Restarted worker retries and clears completed work');
 assert.equal(saved.libraries.a.data.folders[0].posts.find(p=>p.noteId==='n1').hasThumbnail,true);
 console.log(`PASS: cache read ${cachedMs.toFixed(2)}ms; coalesced reads, targeted list saves, concurrent write merge, restart persistence, offline cache, durable thumbnail retry.`);
+
+// Deletion patches stale reads, survives restart, and cancels deferred images.
+saved.thumbnailQueue={n1:{action:'attachThumbnail',accountId:'a',folderId:'essays',noteId:'n1'}};
+boot();read=deferred();image=deferred();
+nativeHandler=m=>m.action==='snapshot'?read.promise:m.action==='attachThumbnail'?image.promise:{ok:true,accountId:'a',folderId:'essays',deleted:true};
+alarmListener({name:'sf-thumbnails'});await tick();
+const oldScan=send({action:'snapshot',refresh:true});await tick();
+const deletion=await send({action:'deleteFolder',accountId:'a',folderId:'essays'});
+assert.ok(!deletion.snapshot.folders.some(f=>f.id==='essays'));assert.deepEqual(saved.thumbnailQueue,{});
+read.resolve(library);await oldScan;
+image.resolve({...post,hasThumbnail:true});await tick();await tick();
+assert.ok(!saved.libraries.a.data.folders.some(f=>f.id==='essays'),'Stale scan and late thumbnail cannot resurrect list');
+boot();assert.deepEqual((await send({action:'snapshot'})).folders.map(f=>f.id),['design']);
+nativeHandler=async()=>({ok:false,error:'Permission denied'});
+await send({action:'deleteFolder',accountId:'a',folderId:'design'});
+assert.equal((await send({action:'snapshot'})).folders.length,1,'Failed deletion leaves cache intact');
+console.log('PASS: delete broadcast/cache/restart, failed deletion, stale snapshot merge and pending/in-flight image cleanup.');

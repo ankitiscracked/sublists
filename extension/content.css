@@ -77,6 +77,22 @@
 .sf-library .sf-refresh:focus-visible { outline:1px solid var(--sf-focus);outline-offset:2px }
 .sf-library .sf-refresh:disabled { opacity:.5;cursor:default }
 .sf-refresh svg { display:block }
+.sf-list-actions { display:flex;align-items:center;gap:8px }
+.sf-library .sf-delete-list[hidden] { display:none }
+.sf-delete-dialog { box-sizing:border-box;position:fixed;inset:auto;margin:0;width:312px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);padding:16px;border:1px solid var(--sf-line);border-radius:8px;background:var(--sf-surface);color:var(--sf-fg);box-shadow:0 4px 16px #00000014;overflow:auto;font:400 14px/20px var(--font-family-text,system-ui,sans-serif) }
+.sf-delete-dialog[open] { display:flex;flex-direction:column;gap:8px }
+.sf-delete-dialog::backdrop { background:transparent }
+.sf-delete-dialog h3 { margin:0;font:600 15px/20px var(--font-family-text,system-ui,sans-serif);overflow-wrap:anywhere;color:var(--sf-fg) }
+.sf-delete-dialog p { margin:0;color:var(--sf-muted);font:inherit;overflow-wrap:anywhere }
+.sf-delete-actions { display:flex;justify-content:flex-end;gap:8px;padding-top:8px }
+.sf-delete-dialog .sf-delete-actions button { height:32px;padding:0 12px;border:1px solid var(--sf-line);border-radius:6px;background:var(--sf-surface);color:var(--sf-fg);font:600 13px/18px var(--font-family-text,system-ui,sans-serif);cursor:pointer }
+.sf-delete-dialog .sf-delete-actions button:hover { background:var(--sf-field) }
+.sf-delete-dialog .sf-delete-actions .sf-delete-confirm { background:#c43d34;border-color:#c43d34;color:#fff }
+.sf-delete-dialog .sf-delete-actions .sf-delete-confirm:hover { background:#ab332c;border-color:#ab332c }
+.sf-delete-dialog .sf-delete-actions button:focus-visible { outline:1px solid var(--sf-focus);outline-offset:2px }
+.sf-delete-dialog .sf-delete-actions button:disabled { opacity:.6;cursor:default }
+.sf-delete-dialog .sf-delete-error { color:var(--sf-fg) }
+.sf-delete-success { margin:0 0 16px;color:var(--sf-muted);font-size:13px;line-height:20px;overflow-wrap:anywhere }
 .sf-list-search { display:flex;align-items:center;gap:16px;height:40px;padding:10px 12px;border-radius:8px;background:var(--sf-field);margin-bottom:16px }
 .sf-list-search>svg { flex:0 0 20px;color:var(--sf-muted) }
 .sf-list-search:focus-within { box-shadow:inset 0 0 0 1px var(--sf-focus) }

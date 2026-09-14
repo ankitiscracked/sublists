@@ -112,6 +112,27 @@ function run(argv) {
   } else if (req.action === "createFolder") {
     const selected = namedFolder(req.name), f = selected.folder;
     result = {id: f.id(), name: f.name(), accountId: account.id(), posts: [], createdFolder: selected.created};
+  } else if (req.action === "deleteFolder") {
+    if (!req.accountId || !req.folderId) throw Error("Choose an account and list before deleting.");
+    if (root?.id() === req.folderId) throw Error("The Substack folder cannot be deleted here.");
+    const f = root && available(root.folders()).find(f => f.id() === req.folderId && f.container().id() === root.id());
+    // A retry after a lost response is harmless. Never look outside this root.
+    result = {accountId: account.id(), folderId: req.folderId, deleted: true, alreadyDeleted: !f};
+    if (f) {
+      if (f.shared()) throw Error("Shared lists cannot be deleted here.");
+      if (available(f.folders()).length) throw Error("This list contains nested folders. Manage it in Apple Notes.");
+      const notes = available(f.notes());
+      if (notes.some(n => n.passwordProtected() || n.shared())) throw Error("This list contains locked or shared notes. Manage it in Apple Notes.");
+      const ids = notes.map(n => n.id());
+      result.folderName = f.name();
+      // Notes' folder-delete Apple event can bypass Recently Deleted for its
+      // contents. Delete each note normally before removing the empty folder.
+      for (const n of notes) app.delete(n);
+      if (available(f.notes()).length) throw Error("Apple Notes has not removed all items yet. Try again.");
+      app.delete(f);
+      if (available(root.folders()).some(f => f.id() === req.folderId)) throw Error("Apple Notes has not deleted the list yet. Try again.");
+      for (const id of ids) delete cache[id];
+    }
   } else if (req.action === "save") {
     if (!!req.folderId === !!req.folderName) throw Error("Choose a list or provide a new list name before saving.");
     const selected = req.folderId ? {folder: folder(), created: false} : namedFolder(req.folderName);

@@ -1,0 +1,43 @@
+<!doctype html><meta charset="utf-8"><title>List deletion checks</title>
+<pre id="result">Running…</pre><iframe id="frame" style="width:100%;height:720px;border:0" src="/preview/index.html?lists=1&v=15#list=design"></iframe>
+<script>
+const tick=()=>new Promise(r=>setTimeout(r,100)),assert=(v,m)=>{if(!v)throw Error(m)};
+frame.onload=async()=>{try{
+ await tick();const w=frame.contentWindow,d=frame.contentDocument,send=w.chrome.runtime.sendMessage;
+ const q=s=>d.querySelector(s),click=async s=>{assert(q(s),'Missing '+s);q(s).click();await tick();};
+ const original=(await send({action:'snapshot'})).folders, savedBefore=w.nativeSaveClicks;
+ let requests=[];w.chrome.runtime.sendMessage=async req=>{requests.push(req);return send(req);};
+ await click('.sf-delete-list');const dialog=q('dialog');
+ assert(dialog.open&&dialog.textContent.includes('Delete “Design”?'),'Confirmation names target list');
+ assert(d.activeElement===q('.sf-delete-cancel'),'Cancel receives initial focus');
+ assert(w.getComputedStyle(dialog).backgroundColor!=='rgba(0, 0, 0, 0)','Opaque themed surface');
+ const bounds=dialog.getBoundingClientRect(),anchor=q('.sf-delete-list').getBoundingClientRect();
+ assert(Math.abs(bounds.right-anchor.right)<1&&Math.abs(bounds.top-anchor.bottom-8)<1,'Confirmation is anchored');
+ await click('.sf-delete-cancel');assert(!q('dialog')&&d.activeElement===q('.sf-delete-list'),'Cancel restores focus');
+ assert(requests.length===0,'Opening/cancelling never writes');
+ await click('.sf-delete-list');q('dialog').dispatchEvent(new Event('cancel',{cancelable:true}));await tick();assert(!q('dialog'),'Escape cancellation closes');
+ await click('.sf-delete-list');
+ let release;w.chrome.runtime.sendMessage=async req=>{requests.push(req);return new Promise(r=>release=r);};
+ q('.sf-delete-confirm').click();q('.sf-delete-confirm').click();await tick();
+ assert(requests.length===1&&requests[0].action==='deleteFolder'&&requests[0].folderId==='design'&&requests[0].accountId==='preview','One targeted delete request');
+ assert(q('.sf-delete-cancel').disabled&&q('.sf-delete-confirm').disabled&&q('dialog').getAttribute('aria-busy')==='true','Pending state blocks repeat submission');
+ q('dialog').dispatchEvent(new Event('cancel',{cancelable:true}));assert(q('dialog').open,'Busy dialog cannot be dismissed accidentally');
+ release({ok:false,error:'Couldn’t connect to Apple Notes.'});await tick();
+ assert(!q('.sf-delete-error').hidden&&q('.sf-delete-confirm').textContent==='Retry','Failure offers retry in same confirmation');
+ assert((await send({action:'snapshot'})).folders.length===original.length,'Failed deletion leaves data intact');
+ w.chrome.runtime.sendMessage=async req=>{requests.push(req);return send(req);};
+ await click('.sf-delete-confirm');
+ assert(w.location.hash==='#lists'&&!q('dialog')&&!q('[data-folder-id="design"]'),'Success returns to updated index');
+ assert(q('.sf-delete-success').textContent==='“Design” deleted.'&&q('.sf-delete-success').getAttribute('role')==='status','Success announced');
+ assert(d.activeElement===q('.sf-lists-search'),'Search receives focus after deletion');
+ const remaining=(await send({action:'snapshot'})).folders;
+ assert(JSON.stringify(remaining)===JSON.stringify(original.filter(f=>f.id!=='design')),'Other lists and items unchanged');
+ assert(w.nativeSaveClicks===savedBefore,'Substack saves unchanged');
+ await click('[data-folder-id="essays"]');await click('.sf-delete-list');await click('.sf-delete-confirm');
+ assert(!q('[data-folder-id="essays"]'),'Empty list deletion succeeds');
+ await click('[data-folder-id="weekend"]');await click('.sf-delete-list');
+ w.history.pushState(null,'','/home');w.dispatchEvent(new PopStateEvent('popstate'));await tick();
+ assert(!q('dialog')&&!q('.sf-library'),'Navigation closes confirmation and releases modal');
+ result.textContent='PASS: anchored themed confirmation, cancel/Escape/focus, busy and double-click protection, error/retry, populated and empty deletion, index/success/cache update, unchanged other lists/native saves, navigation cleanup.';
+}catch(e){result.textContent='FAIL: '+e.message;throw e;}};
+</script>

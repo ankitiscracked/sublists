@@ -21,6 +21,10 @@ View the items in a list:
 
 ![List detail page showing saved posts and Notes](docs/screenshots/list-detail.png)
 
+Delete a list with confirmation:
+
+![Delete list confirmation](docs/screenshots/delete-list.png)
+
 *Design previews.*
 
 </details>
@@ -51,6 +55,6 @@ Run the same command, click **Reload** for Sublists in `chrome://extensions`, th
 - Connection issue: click **Try again** in the save picker. Use **Set up Apple Notes** or **Setup help** for installation instructions.
 - Notes permission denied: enable Notes under **System Settings → Privacy & Security → Automation**.
 
-The Sublists extension icon opens **Saved → Lists**.
+The Sublists extension icon opens **Saved → Lists**. Open a list and use the trash button to delete it and its items from Apple Notes. Your original Substack saves are kept.
 
 Installed in `~/Library/Application Support/Sublists`. No server or subscription. This works in desktop Chrome, not the Substack mobile app.
